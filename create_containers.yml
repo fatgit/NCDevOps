@@ -1,0 +1,72 @@
+---
+- hosts: localhost
+  remote_user: fat
+  sudo: yes
+  tasks:
+#
+##  - name: Clone github repository
+##      git: repo=https://github.com/sequelize/express-example.git dest="{{ ansible_env.PWD }}/express-example" refspec=+refs/pull/*:refs/heads/*
+#
+#
+
+
+  - name: Create data container with nodejs code
+    docker:
+      name: data_nodejs
+      image: ubuntu
+      state: present
+      volumes:
+      - "{{ ansible_env.PWD }}/express-example:/data"
+
+
+  - name: Create image of application server (NodeJS) from Ubuntu image
+    ignore_errors: yes
+    docker_image: path="{{ ansible_env.PWD }}/node_dokerfile" name="node_application" state=build
+
+  - name: Create image of Nginx balanser from nginx image
+    ignore_errors: yes
+    docker_image: path="{{ ansible_env.PWD }}/nginx_dokerfile" name="nginx_cluster" state=build
+
+
+  - name: Create container application server 1
+    docker:
+      name: nodejs_server1
+      image: node_application
+      state: started
+      volumes_from:
+      - data_nodejs
+      ports:
+      - "127.0.01:3000:3000"
+
+  - name: Create container application server 2
+    docker:
+      name: nodejs_server2
+      image: node_application
+      state: started
+      volumes_from:
+      - data_nodejs
+
+  - name: Create container nginx server
+    docker:
+      name: nginx_balanser
+      image: nginx_cluster
+      state: started
+      volumes_from:
+      - data_nodejs
+      links:
+      - "nodejs_server1:nodejs_server1"
+      - "nodejs_server2:nodejs_server2"
+      ports:
+      - "127.0.0.1:80:80"
+
+#  - name: mysql
+#    docker:
+#      image: centurylink/mysql
+#      name: some-mysql
+#      state: running
+#      env: MYSQL_DATABASE=database_test
+#      ports:
+#      - "127.0.0.1:3306:3306"
+
+  - name: Create container mysql
+    command: docker run -d -p 3306:3306 --name some-mysql -e MYSQL_DATABASE=database_test centurylink/mysql
